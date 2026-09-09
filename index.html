@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nabh Drishti</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #dfdfdf;
+      --text:    #1a1a1a;
+      --muted:   #6b6b6b;
+      --accent:  #C94B20;
+      --pill:    transparent;
+      --pill-bd: #1a1a1a;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .hero {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 26px 40px 0;
+    }
+
+    .logo img {
+      height: 36px;
+      width: auto;
+      display: block;
+      /* force logo to black with no bg */
+      filter: brightness(0) saturate(0);
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-contact {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      color: var(--text);
+      background: var(--pill);
+      border: 1px solid var(--pill-bd);
+      border-radius: 100px;
+      padding: 8px 22px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.18s, border-color 0.18s;
+    }
+    .btn-contact:hover {
+      background: rgba(26,26,26,0.13);
+    }
+
+    .btn-menu {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      width: 40px; height: 40px;
+      background: var(--pill);
+      border: 1px solid var(--pill-bd);
+      border-radius: 100px;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .btn-menu:hover { background: rgba(26,26,26,0.13); }
+    .btn-menu span {
+      display: block;
+      width: 15px; height: 1.5px;
+      background: var(--text);
+      border-radius: 2px;
+    }
+
+    /* ── HEADLINE LAYER ── */
+    .headline-wrap {
+      position: absolute;
+      z-index: 5;
+      /* aligns with the motor's left visual edge */
+      left: calc(4vw + 56px);
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      width: 60vw;
+    }
+
+    h1 {
+      font-size: 72px;
+      font-weight: 400;
+      line-height: 1.06;
+      letter-spacing: -0.024em;
+      color: var(--text);
+    }
+
+    h1 .accent { color: var(--accent); }
+
+    .engine-gap {
+      height: 38vh;
+      flex-shrink: 0;
+    }
+
+    h1.line-bottom {
+      font-size: 72px;
+      font-weight: 400;
+    }
+
+    /* ── ENGINE IMAGE ── */
+    .engine-wrap {
+      position: absolute;
+      z-index: 10;
+      /* 72vw wide: motor (12% into image) lands at 18vw from left viewport edge */
+      width: 72vw;
+      left: 9vw;
+      top: 50%;
+      transform: translateY(-52%);
+      pointer-events: none;
+    }
+
+    .engine-wrap img {
+      width: 100%;
+      height: auto;
+      display: block;
+      /* multiply blend: white/light studio bg becomes the page bg colour */
+      mix-blend-mode: multiply;
+      filter: contrast(1.05) saturate(0.9);
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* ── BOTTOM DESCRIPTOR ── */
+    .descriptor {
+      position: absolute;
+      bottom: 36px;
+      right: 40px;
+      z-index: 20;
+      text-align: right;
+      max-width: 260px;
+    }
+
+    .descriptor p {
+      font-size: 12.5px;
+      font-weight: 400;
+      line-height: 1.72;
+      color: var(--muted);
+    }
+
+    .scroll-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--pill);
+      border: 1px solid var(--pill-bd);
+      border-radius: 100px;
+      padding: 7px 14px 7px 18px;
+      text-decoration: none;
+      transition: color 0.18s, background 0.18s;
+    }
+    .scroll-cta:hover {
+      color: var(--text);
+      background: rgba(26,26,26,0.12);
+    }
+    .arrow-ring {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px; height: 18px;
+      border: 1px solid var(--pill-bd);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .engine-wrap {
+        animation: float 9s ease-in-out infinite;
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(-52%); }
+        50%       { transform: translateY(calc(-52% - 9px)); }
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+
+    <!-- Headline (behind engine) -->
+    <div class="headline-wrap">
+      <h1>One core engine</h1>
+      <div class="engine-gap"></div>
+      <h1 class="line-bottom"><span class="accent">Dual use</span></h1>
+    </div>
+
+    <!-- Engine image (on top of headline, blends into bg) -->
+    <div class="engine-wrap">
+      <img src="Engine side view.png" alt="Nabh Drishti engine" />
+    </div>
+
+    <!-- Nav -->
+    <nav>
+      <div class="logo">
+        <img src="NABH Logo.png" alt="Nabh Drishti" />
+      </div>
+      <div class="nav-right">
+        <a href="#contact" class="btn-contact">Contact</a>
+        <button class="btn-menu" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Bottom descriptor -->
+    <div class="descriptor">
+      <p>Advanced propulsion systems engineered<br>for the next generation of aerospace.</p>
+      <a href="#explore" class="scroll-cta">
+        Scroll To Explore
+        <span class="arrow-ring">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <path d="M4.5 1v7M2 6l2.5 2.5L7 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+    </div>
+
+  </section>
+
+</body>
+</html>
