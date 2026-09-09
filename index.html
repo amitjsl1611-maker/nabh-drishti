@@ -156,11 +156,12 @@
       pointer-events: none;
     }
 
-    #engine-canvas {
+    .engine-wrap video {
       width: 100%;
       height: auto;
       display: block;
       mix-blend-mode: multiply;
+      filter: contrast(1.05) saturate(0.9);
     }
 
     /* ── BOTTOM DESCRIPTOR ── */
@@ -297,12 +298,10 @@
       </div>
     </div>
 
-    <!-- Engine: hidden video for seeking, canvas for display (preserves alpha) -->
-    <video id="engine-video" preload="auto" muted playsinline style="display:none">
-      <source src="Micro_gas_turbine_engine_animation_202609091441.mp4" type="video/mp4" />
-    </video>
     <div class="engine-wrap">
-      <canvas id="engine-canvas" width="1280" height="427"></canvas>
+      <video id="engine-video" preload="auto" muted playsinline>
+        <source src="Micro_gas_turbine_engine_animation_202609091441.mp4" type="video/mp4" />
+      </video>
     </div>
 
     <!-- Nav -->
@@ -376,11 +375,6 @@
   };
 
   const video      = document.getElementById('engine-video');
-  const canvas     = document.getElementById('engine-canvas');
-  const ctx        = canvas.getContext('2d');
-  // Offscreen canvas for pixel-level background removal
-  const offscreen  = document.createElement('canvas');
-  const offCtx     = offscreen.getContext('2d', { willReadFrequently: true });
   const scrollHint = document.getElementById('scroll-hint');
   const hls        = Array.from(document.querySelectorAll('.hl'));
   const descs      = Array.from(document.querySelectorAll('.desc-state'));
@@ -433,15 +427,10 @@
 
       const dur = (video.readyState >= 1 && video.duration) ? video.duration : TL.end;
 
-      // Drive video currentTime
+      // Drive video currentTime directly — native playback handles sharpness
       const target = p * dur;
       if (Math.abs(video.currentTime - target) > 0.016) {
         video.currentTime = target;
-      }
-
-      // Draw frame with background removal
-      if (video.readyState >= 2) {
-        drawFrame();
       }
 
       // Headlines — large vertical travel (70px)
@@ -464,45 +453,11 @@
 
   function onReady() {
     phases = buildPhases(video.duration);
-    const vw = video.videoWidth  || 1280;
-    const vh = video.videoHeight || 720;
-    canvas.width  = vw;
-    canvas.height = vh;
-    // Offscreen at half res for fast pixel processing
-    offscreen.width  = Math.round(vw / 2);
-    offscreen.height = Math.round(vh / 2);
     video.currentTime = 0;
   }
 
   video.addEventListener('loadedmetadata', onReady);
   if (video.readyState >= 1) onReady();
-
-  // Remove near-white studio background pixels, then draw to display canvas
-  function drawFrame() {
-    const ow = offscreen.width, oh = offscreen.height;
-    offCtx.drawImage(video, 0, 0, ow, oh);
-    const img = offCtx.getImageData(0, 0, ow, oh);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i+1], b = d[i+2];
-      // Near-white background: bright and near-neutral grey
-      const brightness = (r + g + b) / 3;
-      const saturation = Math.max(Math.abs(r-g), Math.abs(g-b), Math.abs(r-b));
-      if (brightness > 210 && saturation < 20) {
-        // Smooth falloff rather than hard clip
-        const alpha = Math.max(0, Math.min(255, (255 - brightness) * 4));
-        d[i+3] = alpha;
-      }
-    }
-    offCtx.putImageData(img, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
-  }
-
-  // Draw first frame as soon as it's available
-  video.addEventListener('seeked', () => {
-    if (video.readyState >= 2) drawFrame();
-  });
 
   requestAnimationFrame(tick);
 </script>
