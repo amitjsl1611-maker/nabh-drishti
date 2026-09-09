@@ -14,7 +14,7 @@
       --bg:      #dfdfdf;
       --text:    #1a1a1a;
       --muted:   #6b6b6b;
-      --accent:  #C94B20;
+      --accent:  #2B4D98;
       --pill:    transparent;
       --pill-bd: #1a1a1a;
     }
@@ -147,8 +147,7 @@
       height: auto;
       display: block;
       mix-blend-mode: multiply;
-      /* desaturate then push hue toward #2B4D98 blue */
-      filter: saturate(0) sepia(1) hue-rotate(190deg) saturate(2.2) brightness(0.72) contrast(1.1);
+      filter: contrast(1.05) saturate(0.9);
       user-select: none;
       -webkit-user-drag: none;
     }
@@ -218,7 +217,7 @@
 
     <!-- Headline (above engine) -->
     <div class="headline-wrap">
-      <h1>One engine.<span class="line2">Multiple frontiers...</span></h1>
+      <h1>One <span class="accent">engine</span>.<span class="line2">Multiple frontiers...</span></h1>
     </div>
 
     <!-- Engine image (on top of headline, blends into bg) -->
