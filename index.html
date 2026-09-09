@@ -105,10 +105,10 @@
     /* ── HEADLINE LAYER ── */
     .headline-wrap {
       position: absolute;
-      z-index: 5;
+      z-index: 15;
       left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
+      top: 96px;
+      transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -119,32 +119,21 @@
     h1 {
       font-size: 84px;
       font-weight: 400;
-      line-height: 1.06;
+      line-height: 1.08;
       letter-spacing: -0.024em;
       color: var(--text);
     }
 
     h1 .accent { color: var(--accent); }
 
-    .engine-gap {
-      height: 44vh;
-      flex-shrink: 0;
-    }
-
-    h1.line-bottom {
-      font-size: 84px;
-      font-weight: 400;
-    }
-
     /* ── ENGINE IMAGE ── */
     .engine-wrap {
       position: absolute;
       z-index: 10;
-      /* 72vw wide: motor (12% into image) lands at 18vw from left viewport edge */
       width: 72vw;
       left: 9vw;
-      top: 50%;
-      transform: translateY(-52%);
+      top: 55%;
+      transform: translateY(-50%);
       pointer-events: none;
     }
 
@@ -222,11 +211,9 @@
 <body>
   <section class="hero">
 
-    <!-- Headline (behind engine) -->
+    <!-- Headline (above engine) -->
     <div class="headline-wrap">
-      <h1>One core engine</h1>
-      <div class="engine-gap"></div>
-      <h1 class="line-bottom"><span class="accent">Dual use</span></h1>
+      <h1>Engineering Power.<br>Defining Propulsion.</h1>
     </div>
 
     <!-- Engine image (on top of headline, blends into bg) -->
