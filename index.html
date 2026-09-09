@@ -21,25 +21,21 @@
 
     html, body {
       width: 100%;
+      height: 100%;
       background: var(--bg);
       color: var(--text);
       font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
-    }
-    /* clip only the X axis on body — prevents horizontal overflow without
-       creating a scroll container (overflow-x:hidden would break position:sticky) */
-    body {
-      overflow-x: clip;
+      overflow: hidden; /* page never scrolls — seesaw is wheel-event driven */
     }
 
-    /* ── SCROLL SHELL ── */
+    /* ── SHELL (full-viewport container) ── */
     .scroll-shell {
-      height: 350vh;
+      height: 100vh;
     }
 
     .hero {
-      position: sticky;
-      top: 0;
+      position: relative;
       width: 100vw;
       height: 100vh;
       overflow: hidden;
@@ -378,211 +374,292 @@
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script>
-  gsap.registerPlugin(ScrollTrigger);
+// ═══════════════════════════════════════════════════════════════════════════
+//  SEESAW THRESHOLD INTERACTION — Nabh Drishti Engine Sequence
+//  596 frames · 4 states · 3 binary transitions
+// ═══════════════════════════════════════════════════════════════════════════
 
-  // ── LENIS SMOOTH SCROLL ──
-  const lenis = new Lenis({
-    duration: 1.6,                                      // inertia duration in seconds
-    easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // exponential-decay "slip"
-    orientation: 'vertical',
-    smoothWheel: true,
+// ── FRAME SEQUENCE ──────────────────────────────────────────────────────────
+const TOTAL_FRAMES = 596;
+const FRAME_DIR    = 'frames/';
+const pad = n => String(n).padStart(4, '0');
+
+// ── STATE ANCHORS (1-indexed frame numbers) ─────────────────────────────────
+// Easy to change: adjust frame numbers here if visual anchors shift
+const STATES = [
+  { frame: 1,   textIdx: 0 },  // State 0 — Side view
+  { frame: 199, textIdx: 1 },  // State 1 — Isometric
+  { frame: 397, textIdx: 2 },  // State 2 — Cross-section
+  { frame: 596, textIdx: 3 },  // State 3 — Exploded
+];
+
+// ── TRANSITION CONFIG ────────────────────────────────────────────────────────
+// Each transition has its own local threshold (0–1 of that transition's range)
+const TRANSITIONS = [
+  { from: 0, to: 1, threshold: 0.5 },  // State 0 ↔ 1  (frames 1–199)
+  { from: 1, to: 2, threshold: 0.5 },  // State 1 ↔ 2  (frames 199–397)
+  { from: 2, to: 3, threshold: 0.5 },  // State 2 ↔ 3  (frames 397–596)
+];
+
+// ── SEESAW TUNING ────────────────────────────────────────────────────────────
+const SCROLL_PER_TRANSITION = 320;  // total wheel Δ (px) to traverse one transition
+const DELTA_CAP             = 40;   // max Δ per wheel event — prevents momentum skipping
+const SETTLE_DELAY          = 180;  // ms of scroll silence before commit/reject decision
+const MOMENTUM_LOCK_MS      = 650;  // ms to block wheel after committing (absorbs trackpad burst)
+
+// ── STATE MACHINE ────────────────────────────────────────────────────────────
+let currentState  = 0;      // 0–3
+let scrollAccum   = 0;      // signed, ±SCROLL_PER_TRANSITION
+let isAnimating   = false;
+let inputLocked   = false;
+let debounceTimer = null;
+let activeTween   = null;
+
+// ── CANVAS ───────────────────────────────────────────────────────────────────
+const canvas   = document.getElementById('engine-canvas');
+const ctx      = canvas.getContext('2d');
+const frameArr = new Array(TOTAL_FRAMES);
+
+function drawFrame(zeroIdx) {
+  zeroIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(zeroIdx)));
+  const img = frameArr[zeroIdx];
+  if (img && img.complete && img.naturalWidth) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+}
+
+// 1-indexed frame number → 0-indexed array position
+const toZero = f => Math.round(f) - 1;
+
+// ── INTERIM FRAME POSITION ───────────────────────────────────────────────────
+// Returns a 1-indexed frame number interpolated from the current accumulator
+function getInterimFrame() {
+  const anchorFrom = STATES[currentState].frame;
+
+  if (scrollAccum > 0 && currentState < STATES.length - 1) {
+    const p   = scrollAccum / SCROLL_PER_TRANSITION;
+    const to  = STATES[currentState + 1].frame;
+    return anchorFrom + p * (to - anchorFrom);
+  }
+  if (scrollAccum < 0 && currentState > 0) {
+    const p   = -scrollAccum / SCROLL_PER_TRANSITION;
+    const to  = STATES[currentState - 1].frame;
+    return anchorFrom + p * (to - anchorFrom);
+  }
+  return anchorFrom;
+}
+
+// ── WHEEL / TRACKPAD INPUT ───────────────────────────────────────────────────
+const scrollHint = document.getElementById('scroll-hint');
+let hintDismissed = false;
+
+function onWheel(e) {
+  e.preventDefault();
+  if (inputLocked || isAnimating) return;
+
+  if (!hintDismissed) {
+    scrollHint.classList.add('hidden');
+    hintDismissed = true;
+  }
+
+  // Per-event delta cap — stops a single fast trackpad flick from
+  // skipping multiple states before the momentum lock kicks in
+  const raw   = e.deltaY;
+  const delta = Math.sign(raw) * Math.min(Math.abs(raw), DELTA_CAP);
+  scrollAccum += delta;
+
+  // Clamp: respect state boundaries, never exceed ±SCROLL_PER_TRANSITION
+  if (currentState === 0)                  scrollAccum = Math.max(0, scrollAccum);
+  if (currentState === STATES.length - 1)  scrollAccum = Math.min(0, scrollAccum);
+  scrollAccum = Math.max(-SCROLL_PER_TRANSITION, Math.min(SCROLL_PER_TRANSITION, scrollAccum));
+
+  drawFrame(toZero(getInterimFrame()));
+
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(settle, SETTLE_DELAY);
+}
+
+// Touch support (mobile)
+let touchStartY = null;
+function onTouchStart(e) { touchStartY = e.touches[0].clientY; }
+function onTouchMove(e) {
+  if (touchStartY === null) return;
+  e.preventDefault();
+  const deltaY = touchStartY - e.touches[0].clientY; // positive = scroll down
+  touchStartY  = e.touches[0].clientY;
+  onWheel({ deltaY, preventDefault: () => {} });
+}
+function onTouchEnd() {
+  touchStartY = null;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(settle, SETTLE_DELAY);
+}
+
+// ── SETTLE DECISION ──────────────────────────────────────────────────────────
+function settle() {
+  const absP = Math.abs(scrollAccum) / SCROLL_PER_TRANSITION;
+  const dir  = Math.sign(scrollAccum);
+
+  if (dir === 0) { snapBack(); return; }
+
+  const transIdx  = dir > 0 ? currentState : currentState - 1;
+  const trans     = TRANSITIONS[transIdx];
+  if (!trans)     { snapBack(); return; }
+
+  const canMove = (dir > 0 && currentState < STATES.length - 1) ||
+                  (dir < 0 && currentState > 0);
+
+  if (canMove && absP >= trans.threshold) {
+    commitToState(currentState + dir);
+  } else {
+    snapBack();
+  }
+}
+
+// ── COMMIT ───────────────────────────────────────────────────────────────────
+function commitToState(newState) {
+  isAnimating = true;
+
+  const fromFrame = getInterimFrame();
+  const toFrame   = STATES[newState].frame;
+
+  // Text commits with the state — not tied to raw frame position
+  updateText(newState, true);
+
+  if (activeTween) activeTween.kill();
+  const obj = { f: fromFrame };
+  activeTween = gsap.to(obj, {
+    f:         toFrame,
+    duration:  0.7,
+    ease:      'power3.out',
+    overwrite: true,
+    onUpdate() { drawFrame(toZero(obj.f)); },
+    onComplete() {
+      currentState = newState;
+      scrollAccum  = 0;
+      isAnimating  = false;
+      activeTween  = null;
+      // Lock input briefly — absorbs remaining trackpad momentum burst
+      inputLocked = true;
+      setTimeout(() => { inputLocked = false; }, MOMENTUM_LOCK_MS);
+    }
+  });
+}
+
+// ── SNAP BACK ────────────────────────────────────────────────────────────────
+function snapBack() {
+  isAnimating = true;
+
+  const fromFrame = getInterimFrame();
+  const toFrame   = STATES[currentState].frame;
+
+  if (activeTween) activeTween.kill();
+  const obj = { f: fromFrame };
+  activeTween = gsap.to(obj, {
+    f:         toFrame,
+    duration:  0.45,
+    ease:      'power2.out',
+    overwrite: true,
+    onUpdate() { drawFrame(toZero(obj.f)); },
+    onComplete() {
+      scrollAccum = 0;
+      isAnimating = false;
+      activeTween = null;
+    }
+  });
+}
+
+// ── TEXT / HEADLINE STATE ────────────────────────────────────────────────────
+const hls   = Array.from(document.querySelectorAll('.hl'));
+const descs = Array.from(document.querySelectorAll('.desc-state'));
+
+function updateText(stateIdx, animate) {
+  hls.forEach((el, i) => {
+    if (!animate) {
+      gsap.set(el, i === stateIdx
+        ? { opacity: 1, y: 0 }
+        : { opacity: 0, y: i < stateIdx ? -60 : 60 });
+      return;
+    }
+    if (i === stateIdx) {
+      gsap.to(el, { opacity: 1, y: 0,  duration: 0.5, ease: 'power2.out', delay: 0.12, overwrite: true });
+    } else {
+      gsap.to(el, { opacity: 0, y: i < stateIdx ? -60 : 60, duration: 0.3, ease: 'power2.in', overwrite: true });
+    }
   });
 
-  // Feed Lenis into GSAP's ticker so ScrollTrigger reads the smoothed position
-  lenis.on('scroll', ScrollTrigger.update);
-  gsap.ticker.add(time => lenis.raf(time * 1000));
-  gsap.ticker.lagSmoothing(0);
-
-  // ── FRAME SEQUENCE CONFIG ──
-  const TOTAL_FRAMES = 596;   // 60fps × 10s — motion-interpolated by ffmpeg minterpolate
-  const FRAME_DIR    = 'frames/';
-  const pad = n => String(n).padStart(4, '0');
-
-  // ── WEIGHTED SEGMENT MAP ──
-  // f0/f1 = frame indices at 60fps (time × 60)
-  const SEGS = [
-    { f0:   0, f1:  90, w: 0.06 },  // side view hold       0–1.5s
-    { f0:  90, f1: 180, w: 0.22 },  // side → isometric     1.5–3.0s
-    { f0: 180, f1: 276, w: 0.06 },  // isometric hold       3.0–4.6s
-    { f0: 276, f1: 330, w: 0.24 },  // iso → cross-section  4.6–5.5s
-    { f0: 330, f1: 420, w: 0.06 },  // cross-section hold   5.5–7.0s
-    { f0: 420, f1: 510, w: 0.24 },  // cross → exploded     7.0–8.5s
-    { f0: 510, f1: 595, w: 0.12 },  // exploded hold        8.5–10s
-  ];
-  const totalW = SEGS.reduce((s, g) => s + g.w, 0);
-  let cum = 0;
-  SEGS.forEach(g => { g.w /= totalW; g.s0 = cum; cum += g.w; g.s1 = cum; });
-
-  function progressToFrame(p) {
-    p = Math.max(0, Math.min(1, p));
-    for (let i = 0; i < SEGS.length; i++) {
-      const g = SEGS[i];
-      if (p <= g.s1 || i === SEGS.length - 1) {
-        const t = (g.s1 > g.s0) ? (p - g.s0) / (g.s1 - g.s0) : 0;
-        return Math.round(g.f0 + Math.max(0, Math.min(1, t)) * (g.f1 - g.f0));
-      }
+  descs.forEach((el, i) => {
+    if (!animate) {
+      gsap.set(el, i === stateIdx ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 });
+      return;
     }
-    return TOTAL_FRAMES - 1;
-  }
-
-  // Inverse: frame → scroll progress (for headline phase sync)
-  function frameToProgress(f) {
-    const norm = f / (TOTAL_FRAMES - 1);
-    for (let i = 0; i < SEGS.length; i++) {
-      const g = SEGS[i];
-      const gf0 = g.f0 / (TOTAL_FRAMES - 1);
-      const gf1 = g.f1 / (TOTAL_FRAMES - 1);
-      if (norm <= gf1 || i === SEGS.length - 1) {
-        const t = (gf1 > gf0) ? (norm - gf0) / (gf1 - gf0) : 0;
-        return g.s0 + Math.max(0, Math.min(1, t)) * (g.s1 - g.s0);
-      }
+    if (i === stateIdx) {
+      gsap.to(el, { opacity: 1, y: 0,  duration: 0.5, ease: 'power2.out', delay: 0.18, overwrite: true });
+    } else {
+      gsap.to(el, { opacity: 0, y: 10, duration: 0.3, ease: 'power2.in', overwrite: true });
     }
-    return 1;
-  }
+  });
+}
 
-  // ── CANVAS + FRAME ARRAY ──
-  const canvas     = document.getElementById('engine-canvas');
-  const ctx        = canvas.getContext('2d');
-  const scrollHint = document.getElementById('scroll-hint');
-  const loader     = document.getElementById('frame-loader');
-  const loaderBar  = document.getElementById('frame-loader-bar');
-  const hls        = Array.from(document.querySelectorAll('.hl'));
-  const descs      = Array.from(document.querySelectorAll('.desc-state'));
+// ── PRELOAD ───────────────────────────────────────────────────────────────────
+const loader    = document.getElementById('frame-loader');
+const loaderBar = document.getElementById('frame-loader-bar');
+let   loadedCount = 0;
+let   interactionStarted = false;
 
-  const frames = new Array(TOTAL_FRAMES);
-  let loadedCount = 0;
-  let currentFrameIdx = 0;
+function startInteraction() {
+  if (interactionStarted) return;
+  interactionStarted = true;
+  loader.classList.add('done');
+  window.addEventListener('wheel',      onWheel,      { passive: false });
+  window.addEventListener('touchstart', onTouchStart, { passive: true  });
+  window.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  window.addEventListener('touchend',   onTouchEnd,   { passive: true  });
+}
 
-  function drawFrame(idx) {
-    idx = Math.max(0, Math.min(TOTAL_FRAMES - 1, idx));
-    if (frames[idx] && frames[idx].complete && frames[idx].naturalWidth) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(frames[idx], 0, 0, canvas.width, canvas.height);
-      currentFrameIdx = idx;
-    }
-  }
-
-  // ── HEADLINE PHASES ──
-  // Breakpoint frame indices (60fps)
-  const BP = {
-    sideToIsoStart:         90,   // 1.5s × 60
-    isoStart:              180,   // 3.0s × 60
-    isoToSectionStart:     276,   // 4.6s × 60
-    sectionStart:          330,   // 5.5s × 60
-    sectionToExplodedStart:420,   // 7.0s × 60
-    explodedStart:         510,   // 8.5s × 60
+function loadOneFrame(i) {
+  if (frameArr[i] && frameArr[i].src) return; // already queued
+  const img = new Image();
+  img.onload = img.onerror = () => {
+    loadedCount++;
+    loaderBar.style.width = (loadedCount / TOTAL_FRAMES * 100).toFixed(1) + '%';
+    if (loadedCount === TOTAL_FRAMES) startInteraction();
   };
+  img.src = `${FRAME_DIR}frame_${pad(i + 1)}.jpg`;
+  frameArr[i] = img;
+}
 
-  function buildPhases() {
-    const q = f => frameToProgress(f);
-    const mid = (a, b) => (a + b) / 2;
-    const m12 = mid(q(BP.sideToIsoStart),         q(BP.isoStart));
-    const m23 = mid(q(BP.isoToSectionStart),       q(BP.sectionStart));
-    const m34 = mid(q(BP.sectionToExplodedStart),  q(BP.explodedStart));
-    return [
-      [ -1,  0,                       q(BP.sideToIsoStart),        m12 ],
-      [ m12, q(BP.isoStart),          q(BP.isoToSectionStart),     m23 ],
-      [ m23, q(BP.sectionStart),      q(BP.sectionToExplodedStart),m34 ],
-      [ m34, q(BP.explodedStart),     2,                           3   ],
-    ];
-  }
-
-  const phases = buildPhases();
-
-  function rp(a, b, p) { return Math.max(0, Math.min(1, (p - a) / (b - a))); }
-
-  function animState(idx, p, enterY, exitY) {
-    const [es, ee, ae, xe] = phases[idx];
-    if (p <= es)  return { y: enterY, o: 0 };
-    if (p <= ee)  { const t = rp(es, ee, p); return { y: enterY * (1 - t), o: t }; }
-    if (p <= ae)  return { y: 0, o: 1 };
-    if (p <= xe)  { const t = rp(ae, xe, p); return { y: exitY * t, o: 1 - t }; }
-    return { y: exitY, o: 0 };
-  }
-
-  function updateText(p) {
-    if (p > 0.015) scrollHint.classList.add('hidden');
-    else           scrollHint.classList.remove('hidden');
-
-    hls.forEach((el, i) => {
-      const { y, o } = animState(i, p, 70, -70);
-      el.style.transform = `translateY(${y.toFixed(2)}px)`;
-      el.style.opacity   = o.toFixed(3);
-    });
-    descs.forEach((el, i) => {
-      const { y, o } = animState(i, p, 10, -10);
-      el.style.transform = `translateY(${y.toFixed(2)}px)`;
-      el.style.opacity   = o.toFixed(3);
-    });
-  }
-
-  // ── GSAP SCROLL TRIGGER ──
-  function startScrollAnimation() {
-    loader.classList.add('done');
-
-    // Draw frame 0 immediately
+function preload() {
+  // 1. Frame 0 — draw immediately so engine is visible at page load
+  const first = new Image();
+  first.onload = () => {
+    frameArr[0] = first;
     drawFrame(0);
-    updateText(0);
+    updateText(0, false);
+    loadedCount++;
+    loaderBar.style.width = (1 / TOTAL_FRAMES * 100).toFixed(1) + '%';
 
-    const proxy = { frame: 0 };
+    // 2. Anchor frames next (so each state key-frame is decodable fast)
+    const ANCHORS = [198, 396, 595]; // 0-indexed versions of 199, 397, 596
+    ANCHORS.forEach(i => loadOneFrame(i));
 
-    gsap.to(proxy, {
-      frame: TOTAL_FRAMES - 1,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: '.scroll-shell',
-        start: 'top top',
-        end: 'bottom bottom',
-        scrub: 0.8,           // momentum lag — premium feel without sluggishness
-        onUpdate(self) {
-          const frameIdx = progressToFrame(self.progress);
-          drawFrame(frameIdx);
-          updateText(self.progress);
-        }
-      },
-      onUpdate() {
-        // also driven by onUpdate above; proxy.frame drives nothing directly
-      }
-    });
-  }
+    // 3. All remaining frames in parallel
+    for (let i = 1; i < TOTAL_FRAMES; i++) {
+      if (!ANCHORS.includes(i)) loadOneFrame(i);
+    }
+  };
+  first.onerror = () => {
+    loadedCount++;
+    for (let i = 1; i < TOTAL_FRAMES; i++) loadOneFrame(i);
+  };
+  first.src = `${FRAME_DIR}frame_0001.jpg`;
+  frameArr[0] = first;
+}
 
-  // ── FRAME PRELOAD ──
-  function preload() {
-    // Prioritise: load frame 0 first so something is visible immediately,
-    // then load all others in parallel
-    const load = i => new Promise(resolve => {
-      const img = new Image();
-      img.onload = img.onerror = () => {
-        loadedCount++;
-        loaderBar.style.width = (loadedCount / TOTAL_FRAMES * 100).toFixed(1) + '%';
-        if (loadedCount === TOTAL_FRAMES) startScrollAnimation();
-        resolve();
-      };
-      img.src = `${FRAME_DIR}frame_${pad(i + 1)}.jpg`;
-      frames[i] = img;
-    });
-
-    // Load frame 0 first, draw it immediately when ready
-    const first = new Image();
-    first.onload = () => {
-      frames[0] = first;
-      drawFrame(0);
-      loadedCount++;
-      loaderBar.style.width = (1 / TOTAL_FRAMES * 100).toFixed(1) + '%';
-      if (TOTAL_FRAMES === 1) startScrollAnimation();
-      // Load rest
-      for (let i = 1; i < TOTAL_FRAMES; i++) load(i);
-    };
-    first.onerror = () => { loadedCount++; for (let i = 1; i < TOTAL_FRAMES; i++) load(i); };
-    first.src = `${FRAME_DIR}frame_0001.jpg`;
-    frames[0] = first;
-  }
-
-  preload();
+preload();
 </script>
 
 </body>
