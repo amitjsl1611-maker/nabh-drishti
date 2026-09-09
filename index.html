@@ -359,17 +359,8 @@
 </div>
 
 <script>
-  // ── TIMELINE (seconds — derived from actual video frame analysis) ──
-  // Pixel sampling at 0.5s intervals revealed:
-  //   0–1.5s:   side view stable
-  //   1.5–3.0s: rotation to isometric (left pixels clear)
-  //   3.0–4.6s: isometric stable
-  //   4.6–5.5s: cutaway begins (centre warms to combustion brown)
-  //   5.5–7.0s: cross-section stable
-  //   7.0–8.5s: components separate (top/left pixels shift)
-  //   8.5–10s:  exploded stable
+  // ── VIDEO TIMELINE (seconds) ──
   const TL = {
-    sideStart:              0.0,
     sideToIsoStart:         1.5,
     isoStart:               3.0,
     isoToSectionStart:      4.6,
@@ -379,24 +370,61 @@
     end:                   10.005
   };
 
+  // ── WEIGHTED SEGMENT MAP ──
+  // Each video segment gets a scroll "budget" (w) regardless of its duration.
+  // Transition segments get 3–4× more scroll budget than stable holds,
+  // so they play out slowly instead of blowing by in a fraction of a scroll.
+  const SEGS = [
+    { t0: 0.0,  t1: 1.5,    w: 0.06 },  // side view hold
+    { t0: 1.5,  t1: 3.0,    w: 0.22 },  // side → isometric  (expanded)
+    { t0: 3.0,  t1: 4.6,    w: 0.06 },  // isometric hold
+    { t0: 4.6,  t1: 5.5,    w: 0.24 },  // iso → cross-section (most expanded)
+    { t0: 5.5,  t1: 7.0,    w: 0.06 },  // cross-section hold
+    { t0: 7.0,  t1: 8.5,    w: 0.24 },  // cross → exploded   (most expanded)
+    { t0: 8.5,  t1: 10.005, w: 0.12 },  // exploded hold
+  ];
+  // Normalise so weights sum to exactly 1, then compute cumulative scroll positions
+  const totalW = SEGS.reduce((s, g) => s + g.w, 0);
+  let cum = 0;
+  SEGS.forEach(g => { g.w /= totalW; g.s0 = cum; cum += g.w; g.s1 = cum; });
+
+  // Map scroll progress [0,1] → video time [0, TL.end]
+  function scrollToTime(p) {
+    for (const g of SEGS) {
+      if (p <= g.s1 || g === SEGS[SEGS.length - 1]) {
+        const t = Math.max(0, Math.min(1, (p - g.s0) / (g.s1 - g.s0)));
+        return g.t0 + t * (g.t1 - g.t0);
+      }
+    }
+    return TL.end;
+  }
+
+  // Map video time → scroll progress (inverse, for headline phase building)
+  function timeToScroll(t) {
+    for (const g of SEGS) {
+      if (t <= g.t1 || g === SEGS[SEGS.length - 1]) {
+        const frac = Math.max(0, Math.min(1, (t - g.t0) / (g.t1 - g.t0)));
+        return g.s0 + frac * (g.s1 - g.s0);
+      }
+    }
+    return 1;
+  }
+
   const video      = document.getElementById('engine-video');
   const scrollHint = document.getElementById('scroll-hint');
   const hls        = Array.from(document.querySelectorAll('.hl'));
   const descs      = Array.from(document.querySelectorAll('.desc-state'));
 
   let scrollProg = 0;
-  let videoTime  = 0; // lerped, not raw scroll target
+  let videoTime  = 0;
 
   window.addEventListener('scroll', () => {
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     scrollProg = maxScroll > 0 ? Math.max(0, Math.min(1, window.scrollY / maxScroll)) : 0;
   }, { passive: true });
 
-  // Progress within a sub-range → [0, 1]
   function rp(a, b, p) { return Math.max(0, Math.min(1, (p - a) / (b - a))); }
 
-  // Headline / desc transform based on scroll progress
-  // Each element has: enterStart, enterEnd, activeEnd, exitEnd (all in scroll-progress space)
   function animState(phases, idx, p, enterY, exitY) {
     const [es, ee, ae, xe] = phases[idx];
     if (p <= es)  return { y: enterY, o: 0 };
@@ -406,51 +434,45 @@
     return { y: exitY, o: 0 };
   }
 
-  function buildPhases(dur) {
-    const q = k => TL[k] / dur;
-    // Each crossfade window is split in half:
-    //   old text exits during first half → new text enters during second half
-    // This guarantees texts never overlap (only one visible at a time).
+  function buildPhases() {
+    // Headline transitions are tied to the video-time breakpoints,
+    // converted to scroll-progress via our weighted map
+    const q = t => timeToScroll(t);
     const mid = (a, b) => (a + b) / 2;
-    const m12 = mid(q('sideToIsoStart'),         q('isoStart'));
-    const m23 = mid(q('isoToSectionStart'),       q('sectionStart'));
-    const m34 = mid(q('sectionToExplodedStart'),  q('explodedStart'));
+    const m12 = mid(q(TL.sideToIsoStart),         q(TL.isoStart));
+    const m23 = mid(q(TL.isoToSectionStart),       q(TL.sectionStart));
+    const m34 = mid(q(TL.sectionToExplodedStart),  q(TL.explodedStart));
     return [
-      // [enterStart, enterEnd, activeEnd, exitEnd]
-      [ -1,                    0,                   q('sideToIsoStart'),        m12  ],
-      [ m12,                   q('isoStart'),        q('isoToSectionStart'),     m23  ],
-      [ m23,                   q('sectionStart'),    q('sectionToExplodedStart'),m34  ],
-      [ m34,                   q('explodedStart'),   2,                          3    ],
+      [ -1,  0,                      q(TL.sideToIsoStart),        m12  ],
+      [ m12, q(TL.isoStart),         q(TL.isoToSectionStart),     m23  ],
+      [ m23, q(TL.sectionStart),     q(TL.sectionToExplodedStart),m34  ],
+      [ m34, q(TL.explodedStart),    2,                           3    ],
     ];
   }
 
-  let phases = buildPhases(TL.end);
+  let phases = buildPhases();
 
   function tick() {
     const p = scrollProg;
 
-    // Scroll hint
     if (p > 0.015) scrollHint.classList.add('hidden');
     else           scrollHint.classList.remove('hidden');
 
-    const dur = (video.readyState >= 1 && video.duration) ? video.duration : TL.end;
-    const target = p * dur;
+    // Map scroll → target video time via weighted segment map
+    const target = scrollToTime(p);
 
-    // Lerp videoTime toward target each frame — smooths out seek decoder latency
-    // Factor 0.18 = ~18% of remaining gap per frame (~60fps) → feels instant but organic
-    videoTime += (target - videoTime) * 0.18;
+    // Lerp with momentum — mimics scrub:1 lag, hides seek decoder latency
+    videoTime += (target - videoTime) * 0.15;
     if (Math.abs(video.currentTime - videoTime) > 0.008) {
       video.currentTime = videoTime;
     }
 
-    // Headlines — large vertical travel (70px)
     hls.forEach((el, i) => {
       const { y, o } = animState(phases, i, p, 70, -70);
       el.style.transform = `translateY(${y.toFixed(2)}px)`;
       el.style.opacity   = o.toFixed(3);
     });
 
-    // Descriptors — subtle (10px only)
     descs.forEach((el, i) => {
       const { y, o } = animState(phases, i, p, 10, -10);
       el.style.transform = `translateY(${y.toFixed(2)}px)`;
@@ -460,13 +482,8 @@
     requestAnimationFrame(tick);
   }
 
-  function onReady() {
-    phases = buildPhases(video.duration);
-    video.currentTime = 0;
-  }
-
-  video.addEventListener('loadedmetadata', onReady);
-  if (video.readyState >= 1) onReady();
+  video.addEventListener('loadedmetadata', () => { video.currentTime = 0; });
+  if (video.readyState >= 1) video.currentTime = 0;
 
   requestAnimationFrame(tick);
 </script>
