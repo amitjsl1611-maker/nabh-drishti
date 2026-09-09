@@ -25,7 +25,9 @@
       color: var(--text);
       font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
+      /* overflow: clip — prevents horizontal scroll WITHOUT creating a scroll container
+         (overflow: hidden breaks position:sticky by making body the scroll container) */
+      overflow: clip;
     }
 
     /* ── SCROLL SHELL ── */
@@ -154,6 +156,7 @@
       top: 62%;
       transform: translateY(-50%);
       pointer-events: none;
+      mix-blend-mode: darken;
     }
 
     .engine-wrap video {
