@@ -34,7 +34,7 @@
 
     /* ── SCROLL SHELL ── */
     .scroll-shell {
-      height: 800vh;
+      height: 600vh;
     }
 
     .hero {
@@ -385,7 +385,7 @@
   const descs      = Array.from(document.querySelectorAll('.desc-state'));
 
   let scrollProg = 0;
-  let lastProg   = -1;
+  let videoTime  = 0; // lerped, not raw scroll target
 
   window.addEventListener('scroll', () => {
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
@@ -424,7 +424,7 @@
     ];
   }
 
-  let phases = buildPhases(TL.end); // initial estimate; recalc on loadedmetadata
+  let phases = buildPhases(TL.end);
 
   function tick() {
     const p = scrollProg;
@@ -433,29 +433,29 @@
     if (p > 0.015) scrollHint.classList.add('hidden');
     else           scrollHint.classList.remove('hidden');
 
-    if (Math.abs(p - lastProg) > 0.00005) {
-      lastProg = p;
+    const dur = (video.readyState >= 1 && video.duration) ? video.duration : TL.end;
+    const target = p * dur;
 
-      const dur = (video.readyState >= 1 && video.duration) ? video.duration : TL.end;
-
-      // Always scrub — no threshold, so every RAF frame is as smooth as possible
-      const target = p * dur;
-      video.currentTime = target;
-
-      // Headlines — large vertical travel (70px)
-      hls.forEach((el, i) => {
-        const { y, o } = animState(phases, i, p, 70, -70);
-        el.style.transform = `translateY(${y.toFixed(2)}px)`;
-        el.style.opacity   = o.toFixed(3);
-      });
-
-      // Descriptors — subtle (10px only)
-      descs.forEach((el, i) => {
-        const { y, o } = animState(phases, i, p, 10, -10);
-        el.style.transform = `translateY(${y.toFixed(2)}px)`;
-        el.style.opacity   = o.toFixed(3);
-      });
+    // Lerp videoTime toward target each frame — smooths out seek decoder latency
+    // Factor 0.18 = ~18% of remaining gap per frame (~60fps) → feels instant but organic
+    videoTime += (target - videoTime) * 0.18;
+    if (Math.abs(video.currentTime - videoTime) > 0.008) {
+      video.currentTime = videoTime;
     }
+
+    // Headlines — large vertical travel (70px)
+    hls.forEach((el, i) => {
+      const { y, o } = animState(phases, i, p, 70, -70);
+      el.style.transform = `translateY(${y.toFixed(2)}px)`;
+      el.style.opacity   = o.toFixed(3);
+    });
+
+    // Descriptors — subtle (10px only)
+    descs.forEach((el, i) => {
+      const { y, o } = animState(phases, i, p, 10, -10);
+      el.style.transform = `translateY(${y.toFixed(2)}px)`;
+      el.style.opacity   = o.toFixed(3);
+    });
 
     requestAnimationFrame(tick);
   }
