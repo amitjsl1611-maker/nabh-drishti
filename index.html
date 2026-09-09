@@ -25,9 +25,11 @@
       color: var(--text);
       font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
-      /* overflow: clip — prevents horizontal scroll WITHOUT creating a scroll container
-         (overflow: hidden breaks position:sticky by making body the scroll container) */
-      overflow: clip;
+    }
+    /* clip only the X axis on body — prevents horizontal overflow without
+       creating a scroll container (overflow-x:hidden would break position:sticky) */
+    body {
+      overflow-x: clip;
     }
 
     /* ── SCROLL SHELL ── */
