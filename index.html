@@ -398,22 +398,20 @@
   gsap.ticker.lagSmoothing(0);
 
   // ── FRAME SEQUENCE CONFIG ──
-  const TOTAL_FRAMES = 240;   // 24fps × 10s — extracted by ffmpeg
+  const TOTAL_FRAMES = 596;   // 60fps × 10s — motion-interpolated by ffmpeg minterpolate
   const FRAME_DIR    = 'frames/';
   const pad = n => String(n).padStart(4, '0');
 
   // ── WEIGHTED SEGMENT MAP ──
-  // Maps scroll progress → frame index non-linearly:
-  // transition segments get 3-4× more scroll budget than stable holds.
-  // f0/f1 = frame index range for this segment (derived from 24fps timeline)
+  // f0/f1 = frame indices at 60fps (time × 60)
   const SEGS = [
-    { f0:   0, f1:  36, w: 0.06 },  // side view hold       0–1.5s
-    { f0:  36, f1:  72, w: 0.22 },  // side → isometric     1.5–3.0s
-    { f0:  72, f1: 110, w: 0.06 },  // isometric hold        3.0–4.6s
-    { f0: 110, f1: 132, w: 0.24 },  // iso → cross-section  4.6–5.5s
-    { f0: 132, f1: 168, w: 0.06 },  // cross-section hold   5.5–7.0s
-    { f0: 168, f1: 204, w: 0.24 },  // cross → exploded     7.0–8.5s
-    { f0: 204, f1: 239, w: 0.12 },  // exploded hold        8.5–10s
+    { f0:   0, f1:  90, w: 0.06 },  // side view hold       0–1.5s
+    { f0:  90, f1: 180, w: 0.22 },  // side → isometric     1.5–3.0s
+    { f0: 180, f1: 276, w: 0.06 },  // isometric hold       3.0–4.6s
+    { f0: 276, f1: 330, w: 0.24 },  // iso → cross-section  4.6–5.5s
+    { f0: 330, f1: 420, w: 0.06 },  // cross-section hold   5.5–7.0s
+    { f0: 420, f1: 510, w: 0.24 },  // cross → exploded     7.0–8.5s
+    { f0: 510, f1: 595, w: 0.12 },  // exploded hold        8.5–10s
   ];
   const totalW = SEGS.reduce((s, g) => s + g.w, 0);
   let cum = 0;
@@ -469,14 +467,14 @@
   }
 
   // ── HEADLINE PHASES ──
-  // Breakpoint frame indices (24fps)
+  // Breakpoint frame indices (60fps)
   const BP = {
-    sideToIsoStart:         36,   // 1.5s × 24
-    isoStart:               72,   // 3.0s
-    isoToSectionStart:     110,   // 4.6s
-    sectionStart:          132,   // 5.5s
-    sectionToExplodedStart:168,   // 7.0s
-    explodedStart:         204,   // 8.5s
+    sideToIsoStart:         90,   // 1.5s × 60
+    isoStart:              180,   // 3.0s × 60
+    isoToSectionStart:     276,   // 4.6s × 60
+    sectionStart:          330,   // 5.5s × 60
+    sectionToExplodedStart:420,   // 7.0s × 60
+    explodedStart:         510,   // 8.5s × 60
   };
 
   function buildPhases() {
