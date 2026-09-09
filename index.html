@@ -34,7 +34,7 @@
 
     /* ── SCROLL SHELL ── */
     .scroll-shell {
-      height: 500vh;
+      height: 800vh;
     }
 
     .hero {
@@ -407,14 +407,20 @@
   }
 
   function buildPhases(dur) {
-    // Convert TL seconds → scroll progress fractions
     const q = k => TL[k] / dur;
+    // Each crossfade window is split in half:
+    //   old text exits during first half → new text enters during second half
+    // This guarantees texts never overlap (only one visible at a time).
+    const mid = (a, b) => (a + b) / 2;
+    const m12 = mid(q('sideToIsoStart'),         q('isoStart'));
+    const m23 = mid(q('isoToSectionStart'),       q('sectionStart'));
+    const m34 = mid(q('sectionToExplodedStart'),  q('explodedStart'));
     return [
       // [enterStart, enterEnd, activeEnd, exitEnd]
-      [ -1,                    0,                      q('sideToIsoStart'),         q('isoStart')               ],
-      [ q('sideToIsoStart'),   q('isoStart'),          q('isoToSectionStart'),      q('sectionStart')           ],
-      [ q('isoToSectionStart'),q('sectionStart'),      q('sectionToExplodedStart'), q('explodedStart')          ],
-      [ q('sectionToExplodedStart'), q('explodedStart'), 2,                         3                           ],
+      [ -1,                    0,                   q('sideToIsoStart'),        m12  ],
+      [ m12,                   q('isoStart'),        q('isoToSectionStart'),     m23  ],
+      [ m23,                   q('sectionStart'),    q('sectionToExplodedStart'),m34  ],
+      [ m34,                   q('explodedStart'),   2,                          3    ],
     ];
   }
 
@@ -432,11 +438,9 @@
 
       const dur = (video.readyState >= 1 && video.duration) ? video.duration : TL.end;
 
-      // Drive video currentTime directly — native playback handles sharpness
+      // Always scrub — no threshold, so every RAF frame is as smooth as possible
       const target = p * dur;
-      if (Math.abs(video.currentTime - target) > 0.016) {
-        video.currentTime = target;
-      }
+      video.currentTime = target;
 
       // Headlines — large vertical travel (70px)
       hls.forEach((el, i) => {
