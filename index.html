@@ -785,7 +785,7 @@
 
     <!-- Nav -->
     <nav>
-      <div class="logo">
+      <div class="logo" id="logo-home" style="cursor:pointer">
         <img src="NABH Logo.png" alt="Nabh Drishti" />
       </div>
       <div class="nav-right">
@@ -1454,6 +1454,12 @@ function unlockForShowcase() {
   const sc = document.getElementById('scroll-showcase');
   lenis.scrollTo(sc, { offset: -88, duration: 1.2 });
 }
+
+// Logo click → scroll to top and re-lock hero
+document.getElementById('logo-home')?.addEventListener('click', () => {
+  scUnlocked = false;
+  lenis.scrollTo(0, { duration: 1.0 });
+});
 
 // Section entry: whole section slides up from 40% → 0% as it enters viewport
 gsap.fromTo('#scroll-showcase',
