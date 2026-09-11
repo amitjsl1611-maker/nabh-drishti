@@ -953,7 +953,7 @@ function onWheel(e) {
   // Once showcase is unlocked, let native scroll handle it.
   // Re-lock hero only if user scrolls back up to the very top.
   if (scUnlocked) {
-    if (window.scrollY === 0 && e.deltaY < 0) scUnlocked = false;
+    if (window.scrollY === 0 && e.deltaY < 0 && Math.abs(lenis.velocity) < 0.1) scUnlocked = false;
     else return;
   }
 
