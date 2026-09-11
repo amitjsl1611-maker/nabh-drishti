@@ -208,7 +208,7 @@
       z-index: 9999;
       background: #0d0d0d;
       overflow: hidden;
-      transition: transform 1s cubic-bezier(0.87, 0, 0.13, 1);
+      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
     }
     /* subtle dot grid in white */
     #page-loader::before {
@@ -272,10 +272,6 @@
       text-transform: uppercase;
       color: rgba(255,255,255,0.35);
       font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    }
-    /* window blind — slides straight up off screen */
-    #page-loader.sweep-out {
-      transform: translateY(-100%);
     }
     #loader-sound-btn {
       position: absolute;
@@ -1568,8 +1564,8 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
   const barFill     = document.getElementById('loader-bar-fill');
   if (!loader || !barFill) return;
 
-  const SWEEP_AT  = 7000;  // progress fills over 7s
-  const SWEEP_DUR = 1000;  // sweep takes 1s
+  const SWEEP_AT  = 10000; // progress fills over 10s
+  const WIPE_DUR  = 0.9;   // diagonal wipe in seconds
 
   // --- audio ---
   const audio = new Audio('engine sound.mp3');
@@ -1582,69 +1578,41 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
   const waveLarge  = document.getElementById('sound-wave-2');
   const muteX      = document.getElementById('sound-mute-x');
 
-  let audioStarted = false;
   let muted = false;
-
-  const FADE_IN_DUR = 1500;
-  const TARGET_VOL  = 0.7;
-
-  function startAudio() {
-    if (audioStarted) return;
-    audioStarted = true;
-    audio.play().catch(() => {});
-    const fadeInStart = performance.now();
-    function fadeInTick(now) {
-      if (muted) return;
-      const t = Math.min((now - fadeInStart) / FADE_IN_DUR, 1);
-      audio.volume = t * TARGET_VOL;
-      if (t < 1) requestAnimationFrame(fadeInTick);
-    }
-    requestAnimationFrame(fadeInTick);
-  }
+  const TARGET_VOL = 0.7;
 
   function setMuted(m) {
     muted = m;
     if (m) {
       audio.volume = 0;
-      soundLabel.textContent = 'Sound off';
-      waveSmall.style.display = 'none';
-      waveLarge.style.display = 'none';
-      muteX.style.display = '';
-      soundBtn.classList.remove('active');
+      if (soundLabel) soundLabel.textContent = 'Sound off';
+      if (waveSmall) waveSmall.style.display = 'none';
+      if (waveLarge) waveLarge.style.display = 'none';
+      if (muteX)     muteX.style.display = '';
+      if (soundBtn)  soundBtn.classList.remove('active');
     } else {
       audio.volume = TARGET_VOL;
-      soundLabel.textContent = 'Sound on';
-      waveSmall.style.display = '';
-      waveLarge.style.display = '';
-      muteX.style.display = 'none';
-      soundBtn.classList.add('active');
-      if (!audioStarted) startAudio();
+      if (soundLabel) soundLabel.textContent = 'Sound on';
+      if (waveSmall)  waveSmall.style.display = '';
+      if (waveLarge)  waveLarge.style.display = '';
+      if (muteX)      muteX.style.display = 'none';
+      if (soundBtn)   soundBtn.classList.add('active');
     }
   }
 
-  if (soundBtn) {
-    soundBtn.addEventListener('click', () => setMuted(!muted));
-  }
+  if (soundBtn) soundBtn.addEventListener('click', () => setMuted(!muted));
 
-  // muted-autoplay trick: browsers allow play() when muted; then we unmute + fade in
+  // muted-autoplay: start muted (always allowed), unmute immediately at full vol
   audio.muted = true;
   audio.play().then(() => {
-    audioStarted = true;
     audio.muted = false;
-    setMuted(false);
-    const fadeInStart = performance.now();
-    function fadeInTick(now) {
-      if (muted) return;
-      const t = Math.min((now - fadeInStart) / FADE_IN_DUR, 1);
-      audio.volume = t * TARGET_VOL;
-      if (t < 1) requestAnimationFrame(fadeInTick);
-    }
-    requestAnimationFrame(fadeInTick);
+    setMuted(false); // full volume right away
   }).catch(() => {
-    // still blocked — button acts as the trigger
     audio.muted = false;
+    // button becomes the trigger if autoplay is blocked
     if (soundBtn) soundBtn.addEventListener('click', () => {
-      if (!audioStarted) { startAudio(); setMuted(false); }
+      audio.play().catch(() => {});
+      setMuted(false);
     }, { once: true });
   });
 
@@ -1658,28 +1626,47 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
   }
   requestAnimationFrame(tick);
 
-  setTimeout(() => {
-    loader.classList.add('sweep-out');
+  // --- diagonal clip-path wipe: bottom-right clears first, top-left last ---
+  function diagonalClip(p) {
+    // p goes 200 → 0; covered region is top-left of line x% + y% = p
+    if (p >= 200) return 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)';
+    if (p <= 0)   return 'polygon(0% 0%, 0% 0%, 0% 0%)';
+    if (p >= 100) {
+      // line cuts right edge at y=(p-100)% and bottom edge at x=(p-100)%
+      return `polygon(0% 0%, 100% 0%, 100% ${p - 100}%, ${p - 100}% 100%, 0% 100%)`;
+    }
+    // line cuts top edge at x=p% and left edge at y=p%
+    return `polygon(0% 0%, ${p}% 0%, 0% ${p}%)`;
+  }
 
-    // taper audio out over the sweep duration
-    const fadeOutStart = performance.now();
+  setTimeout(() => {
+    // taper audio out over the wipe duration
     const startVol = audio.volume;
-    function fadeOutTick(now) {
-      const t = Math.min((now - fadeOutStart) / SWEEP_DUR, 1);
+    const wipeDurMs = WIPE_DUR * 1000;
+    const audioStart = performance.now();
+    function audioFade(now) {
+      const t = Math.min((now - audioStart) / wipeDurMs, 1);
       audio.volume = startVol * (1 - t);
-      if (t < 1) requestAnimationFrame(fadeOutTick);
+      if (t < 1) requestAnimationFrame(audioFade);
       else { audio.pause(); audio.currentTime = 0; }
     }
-    requestAnimationFrame(fadeOutTick);
+    requestAnimationFrame(audioFade);
 
-    // engine stays fixed — fade it out after sweep lands
-    setTimeout(() => {
-      loader.style.display = 'none';
-      if (engineLayer) {
-        engineLayer.classList.add('fade-out');
-        setTimeout(() => { engineLayer.style.display = 'none'; }, 450);
+    // GSAP diagonal wipe
+    const proxy = { p: 200 };
+    gsap.to(proxy, {
+      p: 0,
+      duration: WIPE_DUR,
+      ease: 'power3.inOut',
+      onUpdate() { loader.style.clipPath = diagonalClip(proxy.p); },
+      onComplete() {
+        loader.style.display = 'none';
+        if (engineLayer) {
+          engineLayer.classList.add('fade-out');
+          setTimeout(() => { engineLayer.style.display = 'none'; }, 450);
+        }
       }
-    }, SWEEP_DUR + 50);
+    });
   }, SWEEP_AT);
 })();
 </script>
