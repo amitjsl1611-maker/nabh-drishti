@@ -1533,8 +1533,37 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
   const SWEEP_AT  = 7000;  // progress fills over 7s
   const SWEEP_DUR = 1000;  // sweep takes 1s
 
-  const start = performance.now();
+  // --- audio ---
+  const audio = new Audio('engine sound.mp3');
+  audio.loop  = true;
+  audio.volume = 0;
+  // play on first user interaction if autoplay is blocked
+  const tryPlay = () => {
+    audio.play().catch(() => {});
+    document.removeEventListener('pointerdown', tryPlay);
+    document.removeEventListener('keydown', tryPlay);
+  };
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(() => {
+      // autoplay blocked — wait for first interaction
+      document.addEventListener('pointerdown', tryPlay, { once: true });
+      document.addEventListener('keydown',     tryPlay, { once: true });
+    });
+  }
+  // fade in volume over first 1.5s
+  const FADE_IN_DUR = 1500;
+  const TARGET_VOL  = 0.7;
+  const fadeInStart = performance.now();
+  function fadeInTick(now) {
+    const t = Math.min((now - fadeInStart) / FADE_IN_DUR, 1);
+    audio.volume = t * TARGET_VOL;
+    if (t < 1) requestAnimationFrame(fadeInTick);
+  }
+  requestAnimationFrame(fadeInTick);
 
+  // --- progress bar ---
+  const start = performance.now();
   function tick(now) {
     const elapsed  = now - start;
     const progress = Math.min(elapsed / SWEEP_AT, 1);
@@ -1545,6 +1574,18 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
 
   setTimeout(() => {
     loader.classList.add('sweep-out');
+
+    // taper audio out over the sweep duration
+    const fadeOutStart = performance.now();
+    const startVol = audio.volume;
+    function fadeOutTick(now) {
+      const t = Math.min((now - fadeOutStart) / SWEEP_DUR, 1);
+      audio.volume = startVol * (1 - t);
+      if (t < 1) requestAnimationFrame(fadeOutTick);
+      else { audio.pause(); audio.currentTime = 0; }
+    }
+    requestAnimationFrame(fadeOutTick);
+
     // engine stays fixed — fade it out after sweep lands
     setTimeout(() => {
       loader.style.display = 'none';
