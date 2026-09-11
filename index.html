@@ -1623,34 +1623,30 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
   }
 
   if (soundBtn) {
-    soundBtn.addEventListener('click', () => {
-      if (!audioStarted) {
-        startAudio();
-        setMuted(false);
-      } else {
-        setMuted(!muted);
-      }
-    });
+    soundBtn.addEventListener('click', () => setMuted(!muted));
   }
 
-  // attempt autoplay; if blocked the button becomes the trigger
-  const playPromise = audio.play();
-  if (playPromise !== undefined) {
-    playPromise.then(() => {
-      audioStarted = true;
-      setMuted(false);
-      const fadeInStart = performance.now();
-      function fadeInTick(now) {
-        if (muted) return;
-        const t = Math.min((now - fadeInStart) / FADE_IN_DUR, 1);
-        audio.volume = t * TARGET_VOL;
-        if (t < 1) requestAnimationFrame(fadeInTick);
-      }
-      requestAnimationFrame(fadeInTick);
-    }).catch(() => {
-      // autoplay blocked — button is the cue
-    });
-  }
+  // muted-autoplay trick: browsers allow play() when muted; then we unmute + fade in
+  audio.muted = true;
+  audio.play().then(() => {
+    audioStarted = true;
+    audio.muted = false;
+    setMuted(false);
+    const fadeInStart = performance.now();
+    function fadeInTick(now) {
+      if (muted) return;
+      const t = Math.min((now - fadeInStart) / FADE_IN_DUR, 1);
+      audio.volume = t * TARGET_VOL;
+      if (t < 1) requestAnimationFrame(fadeInTick);
+    }
+    requestAnimationFrame(fadeInTick);
+  }).catch(() => {
+    // still blocked — button acts as the trigger
+    audio.muted = false;
+    if (soundBtn) soundBtn.addEventListener('click', () => {
+      if (!audioStarted) { startAudio(); setMuted(false); }
+    }, { once: true });
+  });
 
   // --- progress bar ---
   const start = performance.now();
