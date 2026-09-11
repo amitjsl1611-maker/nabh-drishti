@@ -219,13 +219,20 @@
       background-size: 28px 28px;
       pointer-events: none;
     }
+    #loader-engine-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #loader-engine-layer.fade-out { opacity: 0; }
     .loader-engine {
       position: absolute;
       width: 62vw;
       right: 120px;
       top: 50%;
       transform: translateY(-50%);
-      pointer-events: none;
     }
     .loader-engine img {
       width: 100%;
@@ -690,10 +697,12 @@
 <body>
 
 <!-- ── PAGE LOADER ── -->
-<div id="page-loader" aria-hidden="true">
+<div id="loader-engine-layer" aria-hidden="true">
   <div class="loader-engine">
     <img src="engine side cad.png" alt="" />
   </div>
+</div>
+<div id="page-loader" aria-hidden="true">
   <div class="loader-content">
     <div class="loader-bar-track">
       <div class="loader-bar-fill" id="loader-bar-fill"></div>
@@ -1516,12 +1525,13 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
 
 // ── PAGE LOADER ─────────────────────────────────────────────────────────────
 (function () {
-  const loader  = document.getElementById('page-loader');
-  const barFill = document.getElementById('loader-bar-fill');
+  const loader      = document.getElementById('page-loader');
+  const engineLayer = document.getElementById('loader-engine-layer');
+  const barFill     = document.getElementById('loader-bar-fill');
   if (!loader || !barFill) return;
 
   const SWEEP_AT  = 7000;  // progress fills over 7s
-  const SWEEP_DUR = 1000;  // diagonal sweep takes 1s
+  const SWEEP_DUR = 1000;  // sweep takes 1s
 
   const start = performance.now();
 
@@ -1535,7 +1545,14 @@ document.querySelectorAll('.ss-card').forEach((card, i) => {
 
   setTimeout(() => {
     loader.classList.add('sweep-out');
-    setTimeout(() => { loader.style.display = 'none'; }, SWEEP_DUR + 50);
+    // engine stays fixed — fade it out after sweep lands
+    setTimeout(() => {
+      loader.style.display = 'none';
+      if (engineLayer) {
+        engineLayer.classList.add('fade-out');
+        setTimeout(() => { engineLayer.style.display = 'none'; }, 450);
+      }
+    }, SWEEP_DUR + 50);
   }, SWEEP_AT);
 })();
 </script>
