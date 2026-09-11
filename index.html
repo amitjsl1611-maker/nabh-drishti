@@ -71,8 +71,12 @@
       width: auto;
       display: block;
       filter: brightness(0) saturate(0);
+      transition: filter 0.3s ease;
       user-select: none;
       -webkit-user-drag: none;
+    }
+    .logo:hover img {
+      filter: none;
     }
 
     .nav-right {
@@ -97,9 +101,13 @@
       align-items: center;
       cursor: pointer;
       text-decoration: none;
-      transition: background 0.18s;
+      transition: background 0.18s, border-color 0.18s, color 0.18s;
     }
-    .btn-contact:hover { background: rgba(26,26,26,0.13); }
+    .btn-contact:hover, .btn-contact:active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
 
     .btn-menu {
       display: flex;
@@ -111,16 +119,21 @@
       border: 1px solid var(--pill-bd);
       border-radius: 0;
       cursor: pointer;
-      transition: background 0.18s;
+      transition: background 0.18s, border-color 0.18s;
       flex-shrink: 0;
     }
-    .btn-menu:hover { background: rgba(26,26,26,0.13); }
+    .btn-menu:hover, .btn-menu:active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
     .btn-menu span {
       display: block;
       width: 15px; height: 1.5px;
       background: var(--text);
       border-radius: 2px;
+      transition: background 0.18s;
     }
+    .btn-menu:hover span, .btn-menu:active span { background: #ffffff; }
 
     /* ── HEADLINE LAYER ── */
     .headline-wrap {
@@ -252,7 +265,7 @@
       top: 0; right: 0; bottom: 0;
       width: clamp(280px, 40vw, 460px);
       pointer-events: none;
-      z-index: 50;
+      z-index: 105;
     }
     .sm-prelayer {
       position: absolute;
@@ -269,7 +282,7 @@
       flex-direction: column;
       padding: 90px 44px 48px;
       overflow-y: auto;
-      z-index: 55;
+      z-index: 110;
       pointer-events: auto;
     }
     .sm-close {
@@ -433,11 +446,13 @@
       max-width: 500px;
     }
     .ss-body {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 400;
       line-height: 1.65;
       color: var(--muted);
-      max-width: 440px;
+      max-width: 400px;
+      text-align: left;
+      text-wrap: pretty;
     }
     /* Fixed image panel — pinned to right half of viewport, images dissolve in/out */
     .ss-img-panel {
@@ -468,17 +483,19 @@
 
     /* ── BENTO SECTION ── */
     .bento-section {
-      padding: 80px 7vw 100px;
+      padding: 80px 7vw;
       background: var(--accent);
       display: flex;
-      align-items: stretch;
+      align-items: center;
       gap: 6vw;
       position: relative;
       z-index: 8;
+      min-height: 848px;
     }
     /* ── BENTO TOP: heading + ND400 copy + CTA ── */
     .bento-top {
       flex: 0 0 300px;
+      height: 490px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -497,8 +514,8 @@
       color: rgba(255,255,255,0.65);
       line-height: 1.65;
       max-width: 300px;
-      margin-bottom: 28px;
     }
+    .bento-top-text { display: flex; flex-direction: column; gap: 16px; }
     .bento-top-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
     .bento-hint {
       font-size: 13px;
@@ -534,19 +551,21 @@
       border: none;
       background: #ffffff;
       padding: 28px;
-      min-height: 450px;
+      height: 490px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      align-items: flex-start;
       position: relative;
       overflow: hidden;
     }
     .bento-card-icon {
-      width: 240px;
-      height: 240px;
+      width: 100%;
+      height: 180px;
       object-fit: contain;
+      object-position: left center;
     }
-    .bento-card-bottom { display: flex; flex-direction: column; gap: 8px; }
+    .bento-card-bottom { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .bento-title {
       font-size: 20px;
       font-weight: 700;
@@ -744,8 +763,10 @@
 
   <!-- Top block: heading + ND400 copy + CTA -->
   <div class="bento-top">
-    <h2 class="bento-heading">Designed &amp;<br>Developed in India</h2>
-    <p class="bento-nd-copy">Our first engine — ND 400 — is a 400 N micro gas turbine. By innovating at every step of the process, we're bringing world-class technology at competitive prices.</p>
+    <div class="bento-top-text">
+      <h2 class="bento-heading">Designed &amp;<br>Developed in India</h2>
+      <p class="bento-nd-copy">Our first engine — ND 400 — is a 400 N micro gas turbine. By innovating at every step of the process, we're bringing world-class technology at competitive prices.</p>
+    </div>
     <div class="bento-top-actions">
       <button class="bento-cta">Request quote</button>
     </div>
